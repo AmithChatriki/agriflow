@@ -2,8 +2,6 @@
 
 A Direct Farm-to-Consumer web platform that connects farmers with buyers and removes middlemen. Farmers list their produce at their own prices, and consumers browse, order and review it directly.
 
-Built as a mini project for Innovation and Design Thinking (B25IDL108), CSE, Rajarajeswari College of Engineering.
-
 ## Problem
 
 Farmers usually sell through several intermediaries (local traders, wholesalers, distributors, retailers). Each one adds a margin, so farmers earn less and consumers pay more. AgriFlow gives farmers a direct channel to customers.
