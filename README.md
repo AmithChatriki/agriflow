@@ -34,15 +34,11 @@ Farmers usually sell through several intermediaries (local traders, wholesalers,
 
 ## How it works
 
-```
-Browser (Farmer / Consumer)
-        |
-   React frontend  (port 5173)
-        |   /api requests
-   Flask backend   (port 5001)
-        |
-   Supabase (Auth + PostgreSQL)
-```
+<p align="center">
+  <img src="docs/agriflow_block_diagram.png" alt="AgriFlow system architecture" width="480">
+</p>
+
+The React frontend sends API requests to the Flask backend, which checks the user's login and role and then reads or writes data in Supabase (PostgreSQL).
 
 ## Database tables
 
