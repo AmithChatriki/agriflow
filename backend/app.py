@@ -245,5 +245,211 @@ def delete_product(product_id):
     return jsonify({"message": "Product deleted"})
 
 
+
+# ---------- Orders ----------
+
+@app.post("/api/orders")
+@login_required(roles=["consumer"])
+def place_order():
+    data = request.get_json(silent=True) or {}
+    items = data.get("items") or []
+    address = (data.get("delivery_address") or request.profile.get("address") or "").strip()
+    payment_method = data.get("payment_method")
+
+    if not items:
+        return error("Your cart is empty")
+    if not address:
+        return error("Delivery address is required")
+    if payment_method not in ("cod", "online"):
+        return error("Payment method must be 'cod' or 'online'")
+
+    # Combine repeated products and validate quantities
+    wanted = {}
+    for item in items:
+        pid = item.get("product_id")
+        try:
+            qty = float(item.get("quantity", 0))
+        except (TypeError, ValueError):
+            return error("Invalid quantity")
+        if not pid or qty <= 0:
+            return error("Each item needs a product_id and a quantity above 0")
+        wanted[pid] = wanted.get(pid, 0) + qty
+
+    try:
+        found = supabase.table("products").select("*").in_("id", list(wanted)).execute().data
+    except Exception:
+        return error("Invalid product in cart")
+    by_id = {p["id"]: p for p in found}
+
+    # Check stock and calculate the total from database prices
+    total = 0
+    lines = []
+    for pid, qty in wanted.items():
+        p = by_id.get(pid)
+        if not p or not p["is_available"]:
+            return error("A product in your cart is no longer available")
+        if qty > float(p["quantity"]):
+            return error(f"Only {p['quantity']} {p['unit']} of {p['name']} left")
+        total += float(p["price"]) * qty
+        lines.append((p, qty))
+
+    order = supabase.table("orders").insert({
+        "consumer_id": request.profile["id"],
+        "total_amount": round(total, 2),
+        "delivery_address": address,
+        "payment_method": payment_method,
+        # Online payment is simulated for this project
+        "payment_status": "paid" if payment_method == "online" else "pending",
+    }).execute().data[0]
+
+    try:
+        supabase.table("order_items").insert([
+            {
+                "order_id": order["id"],
+                "product_id": p["id"],
+                "farmer_id": p["farmer_id"],
+                "quantity": qty,
+                "unit_price": p["price"],
+            }
+            for p, qty in lines
+        ]).execute()
+        for p, qty in lines:
+            left = float(p["quantity"]) - qty
+            supabase.table("products").update(
+                {"quantity": left, "is_available": left > 0}
+            ).eq("id", p["id"]).execute()
+    except Exception as e:
+        supabase.table("orders").delete().eq("id", order["id"]).execute()
+        return error(f"Could not place order: {e}", 500)
+
+    return jsonify(order), 201
+
+
+@app.get("/api/orders")
+@login_required(roles=["consumer"])
+def my_orders():
+    result = (
+        supabase.table("orders")
+        .select("*, order_items(*, products(name, unit))")
+        .eq("consumer_id", request.profile["id"])
+        .order("created_at", desc=True)
+        .execute()
+    )
+    return jsonify(result.data)
+
+
+@app.put("/api/orders/<order_id>/cancel")
+@login_required(roles=["consumer"])
+def cancel_order(order_id):
+    rows = (
+        supabase.table("orders").select("*")
+        .eq("id", order_id).eq("consumer_id", request.profile["id"])
+        .execute().data
+    )
+    if not rows:
+        return error("Order not found", 404)
+    if rows[0]["status"] != "placed":
+        return error("Only orders that are not yet accepted can be cancelled")
+
+    # Put the stock back
+    items = supabase.table("order_items").select("*").eq("order_id", order_id).execute().data
+    for it in items:
+        prod = supabase.table("products").select("quantity").eq("id", it["product_id"]).execute().data
+        if prod:
+            supabase.table("products").update({
+                "quantity": float(prod[0]["quantity"]) + float(it["quantity"]),
+                "is_available": True,
+            }).eq("id", it["product_id"]).execute()
+
+    supabase.table("orders").update({"status": "cancelled"}).eq("id", order_id).execute()
+    return jsonify({"message": "Order cancelled"})
+
+
+@app.get("/api/farmer/orders")
+@login_required(roles=["farmer"])
+def farmer_orders():
+    result = (
+        supabase.table("order_items")
+        .select("*, products(name, unit), "
+                "orders(id, status, payment_method, payment_status, delivery_address, created_at, "
+                "profiles(full_name, phone))")
+        .eq("farmer_id", request.profile["id"])
+        .execute()
+    )
+    return jsonify(result.data)
+
+
+@app.put("/api/orders/<order_id>/status")
+@login_required(roles=["farmer"])
+def update_order_status(order_id):
+    new_status = (request.get_json(silent=True) or {}).get("status")
+    if new_status not in ("accepted", "shipped", "delivered"):
+        return error("Status must be accepted, shipped or delivered")
+
+    mine = (
+        supabase.table("order_items").select("id")
+        .eq("order_id", order_id).eq("farmer_id", request.profile["id"])
+        .execute().data
+    )
+    if not mine:
+        return error("Order not found", 404)
+
+    current = supabase.table("orders").select("status").eq("id", order_id).execute().data[0]
+    if current["status"] in ("cancelled", "delivered"):
+        return error(f"This order is already {current['status']}")
+
+    changes = {"status": new_status}
+    if new_status == "delivered":
+        changes["payment_status"] = "paid"   # cash collected on delivery
+    updated = supabase.table("orders").update(changes).eq("id", order_id).execute()
+    return jsonify(updated.data[0])
+
+
+# ---------- Reviews ----------
+
+@app.get("/api/products/<product_id>/reviews")
+def product_reviews(product_id):
+    result = (
+        supabase.table("reviews")
+        .select("*, profiles(full_name)")
+        .eq("product_id", product_id)
+        .order("created_at", desc=True)
+        .execute()
+    )
+    return jsonify(result.data)
+
+
+@app.post("/api/products/<product_id>/reviews")
+@login_required(roles=["consumer"])
+def add_review(product_id):
+    data = request.get_json(silent=True) or {}
+    try:
+        rating = int(data.get("rating"))
+    except (TypeError, ValueError):
+        return error("Rating must be a number from 1 to 5")
+    if not 1 <= rating <= 5:
+        return error("Rating must be a number from 1 to 5")
+
+    # Only people who received this product can review it
+    bought = (
+        supabase.table("order_items")
+        .select("id, orders!inner(status, consumer_id)")
+        .eq("product_id", product_id)
+        .eq("orders.consumer_id", request.profile["id"])
+        .eq("orders.status", "delivered")
+        .execute().data
+    )
+    if not bought:
+        return error("You can review a product only after it is delivered", 403)
+
+    result = supabase.table("reviews").upsert({
+        "product_id": product_id,
+        "consumer_id": request.profile["id"],
+        "rating": rating,
+        "comment": data.get("comment"),
+    }, on_conflict="product_id,consumer_id").execute()
+    return jsonify(result.data[0]), 201
+
+
 if __name__ == "__main__":
     app.run(debug=True, port=5001)
