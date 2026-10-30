@@ -1,14 +1,20 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { api } from "../api";
+import { useAuth } from "../AuthContext";
+import { useCart } from "../CartContext";
 
 const CATEGORIES = ["All", "Vegetables", "Fruits", "Grains", "Dairy", "Spices", "Other"];
 
 export default function Home() {
+  const { profile } = useAuth();
+  const { addItem } = useCart();
   const [products, setProducts] = useState([]);
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("All");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [addedId, setAddedId] = useState(null);
 
   useEffect(() => {
     const params = new URLSearchParams();
@@ -21,6 +27,12 @@ export default function Home() {
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
   }, [search, category]);
+
+  function handleAdd(product) {
+    addItem(product, 1);
+    setAddedId(product.id);
+    setTimeout(() => setAddedId(null), 1200);
+  }
 
   return (
     <>
@@ -56,6 +68,15 @@ export default function Home() {
               {p.profiles?.address ? `, ${p.profiles.address}` : ""}
             </p>
             <p className="small">{p.quantity} {p.unit} available</p>
+
+            {profile?.role === "consumer" && (
+              <button className="btn full" onClick={() => handleAdd(p)}>
+                {addedId === p.id ? "Added" : "Add to cart"}
+              </button>
+            )}
+            {!profile && (
+              <Link to="/login" className="small">Login to buy</Link>
+            )}
           </div>
         ))}
       </div>
