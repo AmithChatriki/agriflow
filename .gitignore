@@ -218,3 +218,9 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# AgriFlow
+.env
+node_modules/
+venv/
+__pycache__/
