@@ -147,9 +147,17 @@ PRODUCT_FIELDS = ["name", "category", "description", "price",
                   "unit", "quantity", "image_url", "is_available"]
 
 
+def add_rating(product):
+    """Replaces the raw reviews list with an average rating and a count."""
+    ratings = [r["rating"] for r in product.pop("reviews", [])]
+    product["review_count"] = len(ratings)
+    product["avg_rating"] = round(sum(ratings) / len(ratings), 1) if ratings else None
+    return product
+
+
 @app.get("/api/products")
 def list_products():
-    query = supabase.table("products").select("*, profiles(full_name, address)")
+    query = supabase.table("products").select("*, profiles(full_name, address), reviews(rating)")
     query = query.eq("is_available", True)
 
     category = request.args.get("category")
@@ -160,20 +168,20 @@ def list_products():
         query = query.ilike("name", f"%{search}%")
 
     result = query.order("created_at", desc=True).execute()
-    return jsonify(result.data)
+    return jsonify([add_rating(p) for p in result.data])
 
 
 @app.get("/api/products/<product_id>")
 def get_product(product_id):
     result = (
         supabase.table("products")
-        .select("*, profiles(full_name, address)")
+        .select("*, profiles(full_name, address), reviews(rating)")
         .eq("id", product_id)
         .execute()
     )
     if not result.data:
         return error("Product not found", 404)
-    return jsonify(result.data[0])
+    return jsonify(add_rating(result.data[0]))
 
 
 @app.get("/api/farmer/products")

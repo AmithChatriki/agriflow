@@ -6,6 +6,17 @@ import { useCart } from "../CartContext";
 
 const CATEGORIES = ["All", "Vegetables", "Fruits", "Grains", "Dairy", "Spices", "Other"];
 
+function Rating({ avg, count }) {
+  if (!count) return <p className="small">No reviews yet</p>;
+  const full = Math.round(avg);
+  return (
+    <p className="rating">
+      <span className="stars">{"\u2605".repeat(full)}{"\u2606".repeat(5 - full)}</span>
+      <span className="small"> {avg} ({count} {count === 1 ? "review" : "reviews"})</span>
+    </p>
+  );
+}
+
 export default function Home() {
   const { profile } = useAuth();
   const { addItem } = useCart();
@@ -63,6 +74,7 @@ export default function Home() {
             <span className="tag">{p.category}</span>
             <h3>{p.name}</h3>
             <p className="price">Rs. {p.price} / {p.unit}</p>
+            <Rating avg={p.avg_rating} count={p.review_count} />
             {p.description && <p className="muted">{p.description}</p>}
             <p className="small">
               Sold by {p.profiles?.full_name}

@@ -106,3 +106,6 @@ input, select {
 }
 .link-btn.green { color: #2e7d32; }
 .thumb { width: 100%; height: 140px; object-fit: cover; border-radius: 8px; margin-bottom: 8px; }
+
+.rating { margin: 2px 0 6px; }
+.stars { color: #f9a825; letter-spacing: 1px; }
