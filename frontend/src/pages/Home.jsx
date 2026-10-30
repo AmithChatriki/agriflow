@@ -1,0 +1,64 @@
+import { useEffect, useState } from "react";
+import { api } from "../api";
+
+const CATEGORIES = ["All", "Vegetables", "Fruits", "Grains", "Dairy", "Spices", "Other"];
+
+export default function Home() {
+  const [products, setProducts] = useState([]);
+  const [search, setSearch] = useState("");
+  const [category, setCategory] = useState("All");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (search) params.set("search", search);
+    if (category !== "All") params.set("category", category);
+
+    setLoading(true);
+    api(`/products?${params.toString()}`)
+      .then((data) => { setProducts(data); setError(""); })
+      .catch((e) => setError(e.message))
+      .finally(() => setLoading(false));
+  }, [search, category]);
+
+  return (
+    <>
+      <h1>Fresh from the farm</h1>
+      <p className="muted">Buy directly from farmers, with no middlemen.</p>
+
+      <div className="filters">
+        <input
+          placeholder="Search products..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        <select value={category} onChange={(e) => setCategory(e.target.value)}>
+          {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
+        </select>
+      </div>
+
+      {error && <p className="error">{error}</p>}
+      {loading && <p className="muted">Loading products...</p>}
+      {!loading && !error && products.length === 0 && (
+        <p className="muted">No products found.</p>
+      )}
+
+      <div className="grid">
+        {products.map((p) => (
+          <div className="card" key={p.id}>
+            <span className="tag">{p.category}</span>
+            <h3>{p.name}</h3>
+            <p className="price">Rs. {p.price} / {p.unit}</p>
+            {p.description && <p className="muted">{p.description}</p>}
+            <p className="small">
+              Sold by {p.profiles?.full_name}
+              {p.profiles?.address ? `, ${p.profiles.address}` : ""}
+            </p>
+            <p className="small">{p.quantity} {p.unit} available</p>
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}
