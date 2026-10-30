@@ -6,6 +6,7 @@ import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import Cart from "./pages/Cart";
 import Orders from "./pages/Orders";
+import Farmer from "./pages/Farmer";
 
 export default function App() {
   const { profile, loading, logout } = useAuth();
@@ -25,6 +26,7 @@ export default function App() {
               <Link to="/orders">My Orders</Link>
             </>
           )}
+          {profile?.role === "farmer" && <Link to="/farmer">My Dashboard</Link>}
           {profile ? (
             <>
               <span>Hi, {profile.full_name} ({profile.role})</span>
@@ -51,6 +53,7 @@ export default function App() {
           <Route path="/signup" element={<Signup />} />
           <Route path="/cart" element={<Cart />} />
           <Route path="/orders" element={<Orders />} />
+          <Route path="/farmer" element={<Farmer />} />
         </Routes>
       </main>
     </>

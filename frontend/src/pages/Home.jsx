@@ -59,6 +59,7 @@ export default function Home() {
       <div className="grid">
         {products.map((p) => (
           <div className="card" key={p.id}>
+            {p.image_url && <img className="thumb" src={p.image_url} alt={p.name} />}
             <span className="tag">{p.category}</span>
             <h3>{p.name}</h3>
             <p className="price">Rs. {p.price} / {p.unit}</p>
